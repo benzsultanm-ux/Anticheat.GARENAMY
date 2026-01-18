@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AntiCheat MY Ultimate</title>
+<style>
+/* --- GENERAL --- */
+body { margin:0; font-family:'Segoe UI', sans-serif; background:#0f172a; color:white; transition:0.3s; }
+body.light { background:#f0f0f0; color:#111; }
+.container { max-width:1000px; margin:auto; padding:20px; }
+.card { background:#1e293b; padding:20px; border-radius:10px; margin-top:15px; box-shadow:0 0 15px rgba(0,0,0,0.3); transition:0.3s; }
+body.light .card { background:#ffffff; color:#111; }
+input, select, button { width:100%; padding:10px; margin:5px 0; border-radius:6px; border:none; font-size:14px; }
+button { background:#ef4444; color:white; cursor:pointer; font-weight:bold; transition:0.3s; }
+button:hover { background:#dc2626; }
+body.light button { color:white; }
+.nav { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; margin-bottom:10px; gap:10px; }
+.nav select, .nav button { width:auto; }
+.badge { padding:4px 8px; border-radius:5px; font-size:12px; font-weight:bold; }
+.green { background:#16a34a; }
+.orange { background:#f59e0b; }
+.red { background:#dc2626; }
+.hidden { display:none; }
+#reportList table, #adminReports table { width:100%; border-collapse:collapse; table-layout:fixed; word-wrap:break-word; }
+#reportList th, #reportList td, #adminReports th, #adminReports td { padding:8px; text-align:left; border-bottom:1px solid #374151; }
+#reportList th, #adminReports th { background:#1f2937; }
+body.light #reportList th, body.light #adminReports th { background:#ddd; color:#111; border-color:#aaa; }
+a { color:#38bdf8; text-decoration:none; }
+@media(max-width:768px){ .nav { flex-direction:column; gap:10px; } table, th, td { font-size:12px; } }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="nav">
+    <h2>🛡️ AntiCheat MY Ultimate</h2>
+    <div>
+      <select id="langSelect">
+        <option value="bm">Bahasa Melayu</option>
+        <option value="en">English</option>
+      </select>
+      <button id="themeToggle">🌙 Dark/Light</button>
+    </div>
+  </div>
+
+  <!-- AUTH -->
+  <div id="authPage" class="card">
+    <h3 id="authTitle">Login / Register</h3>
+    <input id="email" placeholder="Email">
+    <input id="password" type="password" placeholder="Password">
+    <button id="loginBtn">Login</button>
+    <button id="registerBtn">Register</button>
+  </div>
+
+  <!-- USER PAGE -->
+  <div id="userPage" class="hidden">
+    <div class="card">
+      <h3 id="reportTitle">Lapor Pemain</h3>
+      <input id="uid" placeholder="UID Player">
+      <input id="pname" placeholder="Player Name">
+      <select id="cheat">
+        <option>Aimbot</option>
+        <option>Wallhack</option>
+        <option>Speed Hack</option>
+        <option>Macro</option>
+        <option>Other</option>
+      </select>
+      <input id="proof" placeholder="Evidence Link (YouTube/TikTok)">
+      <button onclick="submitReport()">Submit Report</button>
+    </div>
+    <div class="card">
+      <h3 id="allReportsTitle">Senarai Semua Report</h3>
+      <input type="text" id="searchInput" placeholder="Search UID/Nama" onkeyup="filterReports()">
+      <div id="reportList"></div>
+    </div>
+    <button onclick="logout()" id="logoutBtn">Log Keluar</button>
+  </div>
+
+  <!-- ADMIN PAGE -->
+  <div id="adminPage" class="hidden">
+    <div class="card">
+      <h3>Admin Dashboard</h3>
+      <div>
+        <b>Total Report:</b> <span id="totalReports">0</span> |
+        <b>Confirmed Cheater:</b> <span id="totalCheater">0</span> |
+        <b>Clean:</b> <span id="totalClean">0</span>
+      </div>
+      <input type="text" id="searchAdmin" placeholder="Search UID/Nama" onkeyup="filterAdminReports()">
+      <div id="adminReports"></div>
+    </div>
+    <button onclick="logout()" id="adminLogout">Log Keluar</button>
+  </div>
+</div>
+
+<!-- FIREBASE SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<script>
+// ---------- CONFIG ----------
+// 🔥 GANTI INI DENGAN FIREBASE CONFIG KAMU 🔥
+const firebaseConfig = {
+  apiKey: "API_KEY_HERE",
+  authDomain: "PROJECT_ID.firebaseapp.com",
+  projectId: "PROJECT_ID",
+  storageBucket: "PROJECT_ID.appspot.com",
+  messagingSenderId: "SENDER_ID",
+  appId: "APP_ID"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// ---------- LANG ----------
+let lang = localStorage.getItem("lang") || "bm";
+const text = {
+  bm:{ auth:"Login / Register", report:"Lapor Pemain", allReports:"Senarai Semua Report", logout:"Log Keluar" },
+  en:{ auth:"Login / Register", report:"Report Player", allReports:"All Reports List", logout:"Logout" }
+};
+function setLang(l){ lang=l; localStorage.setItem("lang",l); document.getElementById("authTitle").innerText=text[l].auth; document.getElementById("reportTitle").innerText=text[l].report; document.getElementById("allReportsTitle").innerText=text[l].allReports; document.getElementById("logoutBtn")?.innerText=text[l].logout; document.getElementById("adminLogout")?.innerText=text[l].logout; }
+
+// ---------- THEME ----------
+const themeBtn=document.getElementById("themeToggle");
+themeBtn.onclick=()=>{ document.body.classList.toggle("light"); }
+
+// ---------- AUTH ----------
+window.onload=function(){
+  document.getElementById("langSelect").value=lang; setLang(lang);
+  document.getElementById("langSelect").onchange=function(){ setLang(this.value); };
+  document.getElementById("loginBtn").onclick=login;
+  document.getElementById("registerBtn").onclick=register;
+}
+
+// REGISTER
+function register(){
+  let email=document.getElementById("email").value.trim();
+  let pass=document.getElementById("password").value.trim();
+  auth.createUserWithEmailAndPassword(email,pass)
+    .then(user=>{ alert("Register berhasil!"); userRoleCheck(user.user.uid); })
+    .catch(e=>alert(e.message));
+}
+
+// LOGIN
+function login(){
+  let email=document.getElementById("email").value.trim();
+  let pass=document.getElementById("password").value.trim();
+  auth.signInWithEmailAndPassword(email,pass)
+    .then(user=>userRoleCheck(user.user.uid))
+    .catch(e=>alert(e.message));
+}
+
+// LOGOUT
+function logout(){ auth.signOut().then(()=>location.reload()); }
+
+// ---------- USER ROLE CHECK ----------
+function userRoleCheck(uid){
+  db.collection("users").doc(uid).get().then(doc=>{
+    if(doc.exists){
+      if(doc.data().role=="admin"){ showAdmin(); }
+      else{ showUser(); }
+    } else {
+      db.collection("users").doc(uid).set({role:"user"}).then(()=>showUser());
+    }
+  });
+}
+
+function showUser(){ document.getElementById("authPage").classList.add("hidden"); document.getElementById("userPage").classList.remove("hidden"); loadReportsRealtime(); }
+function showAdmin(){ document.getElementById("authPage").classList.add("hidden"); document.getElementById("adminPage").classList.remove("hidden"); loadReportsRealtime(); }
+
+// ---------- SUBMIT REPORT ----------
+function submitReport(){
+  let uid=document.getElementById("uid").value.trim();
+  let name=document.getElementById("pname").value.trim();
+  let cheat=document.getElementById("cheat").value;
+  let proof=document.getElementById("proof").value.trim();
+  if(!uid||!name){alert("Sila isi UID & Nama"); return;}
+  db.collection("reports").add({uid,name,cheat,proof,status:"Under Investigation",timestamp:firebase.firestore.FieldValue.serverTimestamp()}).then(()=>alert("Report submitted!"));
+  document.getElementById("uid").value=""; document.getElementById("pname").value=""; document.getElementById("proof").value="";
+}
+
+// ---------- REALTIME REPORTS ----------
+function loadReportsRealtime(){
+  db.collection("reports").orderBy("timestamp","desc").onSnapshot(snap=>{
+    let reports=[]; snap.forEach(doc=>reports.push({...doc.data(),id:doc.id}));
+    renderReports(reports); renderAdminReports(reports); notifyNewReport(reports);
+  });
+}
+
+// ---------- RENDER USER ----------
+function renderReports(reports){
+  let html="<table><tr><th>UID</th><th>Nama</th><th>Cheat</th><th>Bukti</th><th>Status</th></tr>";
+  reports.forEach(r=>{
+    let color=r.status=="Under Investigation"?"orange":r.status=="Confirmed Cheater"?"red":"green";
+    html+=`<tr><td>${r.uid}</td><td>${r.name}</td><td>${r.cheat}</td><td><a href="${r.proof}" target="_blank">View</a></td><td><span class="badge ${color}">${r.status}</span></td></tr>`;
+  });
+  html+="</table>"; document.getElementById("reportList").innerHTML=html;
+}
+
+// ---------- RENDER ADMIN ----------
+function renderAdminReports(reports){
+  let html="<table><tr><th>UID</th><th>Nama</th><th>Cheat</th><th>Bukti</th><th>Status</th><th>Action</th></tr>";
+  let total=reports.length, cheater=reports.filter(r=>r.status=="Confirmed Cheater").length, clean=reports.filter(r=>r.status=="Clean").length;
+  document.getElementById("totalReports").innerText=total;
+  document.getElementById("totalCheater").innerText=cheater;
+  document.getElementById("totalClean").innerText=clean;
+  reports.forEach(r=>{
+    let color=r.status=="Under Investigation"?"orange":r.status=="Confirmed Cheater"?"red":"green";
+    html+=`<tr><td>${r.uid}</td><td>${r.name}</td><td>${r.cheat}</td><td><a href="${r.proof}" target="_blank">View</a></td><td><span class="badge ${color}">${r.status}</span></td><td><button onclick="approve('${r.id}')">Confirm Cheater</button> <button onclick="reject('${r.id}')">Mark Clean</button></td></tr>`;
+  });
+  html+="</table>"; document.getElementById("adminReports").innerHTML=html;
+}
+
+// ---------- ADMIN ACTION ----------
+function approve(id){ db.collection("reports").doc(id).update({status:"Confirmed Cheater"}); }
+function reject(id){ db.collection("reports").doc(id).update({status:"Clean"}); }
+
+// ---------- FILTER SEARCH ----------
+function filterReports(){ let val=document.getElementById("searchInput").value.toLowerCase(); db.collection("reports").get().then(snap=>{ let reports=[]; snap.forEach(doc=>reports.push({...doc.data(),id:doc.id})); reports=reports.filter(r=>r.uid.toLowerCase().includes(val)||r.name.toLowerCase().includes(val)); renderReports(reports); }); }
+function filterAdminReports(){ let val=document.getElementById("searchAdmin").value.toLowerCase(); db.collection("reports").get().then(snap=>{ let reports=[]; snap.forEach(doc=>reports.push({...doc.data(),id:doc.id})); reports=reports.filter(r=>r.uid.toLowerCase().includes(val)||r.name.toLowerCase().includes(val)); renderAdminReports(reports); }); }
+
+// ---------- NOTIFY NEW REPORT ----------
+let lastCount=0;
+function notifyNewReport(reports){
+  if(reports.length>lastCount){ alert("🚨 New report added!"); }
+  lastCount=reports.length;
+}
+</script>
+</body>
+</html>
